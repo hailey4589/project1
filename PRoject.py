@@ -3,6 +3,7 @@ import pandas as pd
 # from pandas.plotting import scatter_matrix
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import OneHotEncoder
@@ -12,6 +13,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.naive_bayes import GaussianNB
+import joblib
+
 
 #DATA PROCESSING  
 #import data
@@ -56,12 +59,24 @@ for train_index, test_index in split.split(df, df["attributes"]):
     strat_train_set = df.loc[train_index]
     strat_test_set = df.loc[test_index]
 
-df = strat_train_set.drop('Step', axis=1)
+df = strat_train_set.drop(['Step','attributes'], axis=1)
 df_labels = strat_train_set['Step'].copy()
+
+
+
+df_test = strat_test_set.drop(['Step','attributes'], axis =1)
+df_labels_test = strat_test_set['Step'].copy()
+
+
+
+
+
 
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 ax.scatter(df['X'], df['Y'], df['Z'])
+plt.xlabel('X')
+plt.ylabel('Y')
 plt.show()
 
 
@@ -74,13 +89,6 @@ plt.figure(figsize=(10, 8))
 plt.matshow(corr_matrix)
 sns.heatmap(np.abs(corr_matrix))
 
-'''
-scaler = MinMaxScaler()
-df['X'] = scaler.fit_transform(df['X'],[0,1])
-print('norm df')
-print(df['X'])
-
-'''
 
 # MODEL DEVELOPMENT & ANALYSIS 
 # tree classifier
@@ -89,9 +97,6 @@ tree_clf.fit(df,df_labels)
 
 tree_pred = tree_clf.predict(df)
 
-print('accuracy')
-acc = cross_val_score(tree_clf, df, df_labels, cv=10,scoring="accuracy")
-print(acc)
 
 param_grid = {'criterion':['gini', 'entropy'],'max_depth' :[2,4,6,8,10,12], 'min_samples_split':[2,4,6,8]}
 grid_search = GridSearchCV(tree_clf, param_grid, cv=5,scoring='accuracy',return_train_score=True)
@@ -105,9 +110,6 @@ acc = cross_val_score(tree_clf, df, df_labels, cv=10,scoring="accuracy")
 print(acc)
 
 dfpred = cross_val_predict(tree_clf, df, df_labels, cv=5)
-#print('confusion matrix')
-
-#print(confusion_matrix(df_labels, dfpred))
 
 prec = precision_score(df_labels, tree_pred, average = 'micro')
 print(prec)
@@ -137,9 +139,13 @@ print('accuracy')
 acc = cross_val_score(forest_clf, df, df_labels, cv=10,scoring="accuracy")
 
 forestpred = cross_val_predict(forest_clf, df, df_labels, cv=10)
-print('confusion matrix')
 
-print(confusion_matrix(df_labels, forestpred))
+
+print('confusion matrix')
+cm = confusion_matrix(df_labels, forestpred)
+print(cm)
+sns.heatmap(np.abs(cm))
+
 
 prec = precision_score(df_labels, forest_pred, average = 'micro')
 print(prec)
@@ -167,23 +173,13 @@ print(grid_search.best_params_)
 # apply new best hyperparsmters
 gnb_clf = grid_search.fit(df,df_labels)
 gnb_pred = gnb_clf.predict(df)
-scores = cross_val_score(gnb_clf, df, df_labels,scoring="neg_mean_squared_error", cv=10)
-clf_scores = np.sqrt(-scores)
-print('scores')
-print(scores)
-print(scores.mean())
-print(scores.std())
 
 # precsion, confusion matix, accuracy, F1 score
 print('accuracy')
 acc = cross_val_score(gnb_clf, df, df_labels, cv=10,scoring="accuracy")
 
 gnbpred = cross_val_predict(gnb_clf, df, df_labels, cv=10)
-print(gnbpred)
-print('confusion matrix')
-cm = confusion_matrix(df_labels, gnbpred)
-print(cm)
-sns.heatmap(np.abs(cm))
+
 
 prec = precision_score(df_labels, gnb_pred, average = 'micro')
 print(prec)
@@ -193,8 +189,24 @@ print(f1)
 
 gauss = ['gauss', acc, prec, f1]
 
-compare = [tree, random, gauss]
+compare = np.array([tree, random, gauss],dtype = object)
+print(compare)
 
+# FINAL MODEL SAVE AND TEST
+# save model in joblib format 
+joblib.dump(forest_clf,'class_model')
 
+forest_clf = joblib.load('class_model')
+
+test = forest_clf.predict(df_test)
+print(test)
+print(df_labels_test)
+
+# predict the following 
+df2 = pd.DataFrame(np.array([[9.375,3.0625,1.51], [6.995,5.125,0.3875], [0,3.0625,1.93], [9.4,3,1.8], [9.4,3,1.3]]),
+                   columns=['X', 'Y', 'Z'])
+
+predictions = forest_clf.predict(df2)
+print('The predicted maintenace steps for the given coordinates are:\n', predictions)
 
 
