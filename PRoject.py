@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import f1_score, precision_score, confusion_matrix
+from sklearn.metrics import f1_score, precision_score, confusion_matrix, accuracy_score
 from sklearn.model_selection import cross_val_score, cross_val_predict
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
@@ -46,6 +46,26 @@ print(df.describe())
 df.hist(bins=50, figsize=(20, 15))
 plt.show()
 
+# 3d plot to shpw the corrdintates locations might be helpful to visualize
+
+fig1 = plt.figure()
+ax = plt.axes(projection='3d')
+ax.scatter(df['X'], df['Y'], df['Z'])
+ax.axes.set_xlim3d(left=0, right=9) 
+ax.axes.set_ylim3d(bottom=0, top=8) 
+ax.axes.set_zlim3d(bottom=0, top=8) 
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.show()
+
+
+# corelation matrix 
+corr_matrix = df.corr(numeric_only=True)
+plt.figure(figsize=(10, 8))
+plt.matshow(corr_matrix)
+sns.heatmap(np.abs(corr_matrix), fmt = 'f', annot = True , cmap = 'RdPu')
+
+
 
 df["attributes"] = pd.cut(
     df["Z"], bins=[0, 1, 2, 3, np.inf], right=False, labels=[0.5, 1.5, 2.5, 3.5])
@@ -72,23 +92,6 @@ df_labels_test = strat_test_set['Step'].copy()
 
 
 
-fig = plt.figure()
-ax = plt.axes(projection='3d')
-ax.scatter(df['X'], df['Y'], df['Z'])
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.show()
-
-
-df.hist(bins=50, figsize=(20, 15))
-plt.show()
-
-
-corr_matrix = df.corr(numeric_only=True)
-plt.figure(figsize=(10, 8))
-plt.matshow(corr_matrix)
-sns.heatmap(np.abs(corr_matrix))
-
 
 # MODEL DEVELOPMENT & ANALYSIS 
 # tree classifier
@@ -101,21 +104,22 @@ tree_pred = tree_clf.predict(df)
 param_grid = {'criterion':['gini', 'entropy'],'max_depth' :[2,4,6,8,10,12], 'min_samples_split':[2,4,6,8]}
 grid_search = GridSearchCV(tree_clf, param_grid, cv=5,scoring='accuracy',return_train_score=True)
 tree_clf = grid_search.fit(df, df_labels)
-print(grid_search.best_params_)
 tree_pred = tree_clf.predict(df)
 
 # precsion, confusion matix, accuracy, F1 score
-print('accuracy')
+
 acc = cross_val_score(tree_clf, df, df_labels, cv=10,scoring="accuracy")
-print(acc)
+acc = np.array(acc)
+acc = np.mean(acc)
+
 
 dfpred = cross_val_predict(tree_clf, df, df_labels, cv=5)
 
 prec = precision_score(df_labels, tree_pred, average = 'micro')
-print(prec)
+
 
 f1 = f1_score(df_labels, dfpred, average = 'micro')
-print(f1)
+
 
 tree = ['tree', acc, prec, f1]
 
@@ -130,13 +134,15 @@ forest_pred = forest_clf.predict(df)
 param_grid = [{'n_estimators': [3, 10, 30, 35], 'max_features': [3, 6, 8, 12]},{'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3,4]},]
 grid_search = GridSearchCV(forest_clf, param_grid, cv=10,scoring='accuracy',return_train_score=True)
 forest_clf = grid_search.fit(df, df_labels)
-print(grid_search.best_params_)
+
 
 forest_pred = forest_clf.predict(df)
 
 # precsion, confusion matix, accuracy, F1 score
-print('accuracy')
+
 acc = cross_val_score(forest_clf, df, df_labels, cv=10,scoring="accuracy")
+acc = np.array(acc)
+acc = np.mean(acc)
 
 forestpred = cross_val_predict(forest_clf, df, df_labels, cv=10)
 
@@ -144,14 +150,13 @@ forestpred = cross_val_predict(forest_clf, df, df_labels, cv=10)
 print('confusion matrix')
 cm = confusion_matrix(df_labels, forestpred)
 print(cm)
-sns.heatmap(np.abs(cm))
+sns.heatmap(np.abs(cm), annot = True, fmt = 'd',cmap = 'RdPu', xticklabels=[1,2,3,4,5,6,7,8,9,10,11,12,13],  yticklabels=[1,2,3,4,5,6,7,8,9,10,11,12,13])
 
 
 prec = precision_score(df_labels, forest_pred, average = 'micro')
-print(prec)
+
 
 f1 = f1_score(df_labels, forestpred, average = 'micro')
-print(f1)
 
 random = ['random', acc, prec, f1]
 
@@ -168,24 +173,24 @@ param_nb = {'var_smoothing':np.logspace(0,-5, num=10)}
 
 grid_search = GridSearchCV(gnb_clf, param_nb, cv=10,scoring='accuracy', verbose=1)
 grid_search.fit(df,df_labels)
-print(grid_search.best_params_)
 
 # apply new best hyperparsmters
 gnb_clf = grid_search.fit(df,df_labels)
 gnb_pred = gnb_clf.predict(df)
 
 # precsion, confusion matix, accuracy, F1 score
-print('accuracy')
+
 acc = cross_val_score(gnb_clf, df, df_labels, cv=10,scoring="accuracy")
+acc = np.array(acc)
+acc = np.mean(acc)
 
 gnbpred = cross_val_predict(gnb_clf, df, df_labels, cv=10)
 
 
 prec = precision_score(df_labels, gnb_pred, average = 'micro')
-print(prec)
+
 
 f1 = f1_score(df_labels, gnbpred, average = 'micro')
-print(f1)
 
 gauss = ['gauss', acc, prec, f1]
 
@@ -199,8 +204,16 @@ joblib.dump(forest_clf,'class_model')
 forest_clf = joblib.load('class_model')
 
 test = forest_clf.predict(df_test)
-print(test)
-print(df_labels_test)
+test = np.array(test)
+labels = np.array(df_labels_test)
+print(len(test))
+
+
+# find out if test set and predicted values are the same if not where and what was predicted
+different_indices = np.where(test != labels)[0]
+print(different_indices)
+print(test[different_indices],labels[different_indices])
+
 
 # predict the following 
 df2 = pd.DataFrame(np.array([[9.375,3.0625,1.51], [6.995,5.125,0.3875], [0,3.0625,1.93], [9.4,3,1.8], [9.4,3,1.3]]),
